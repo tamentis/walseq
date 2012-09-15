@@ -19,18 +19,19 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"strconv"
 )
 
 const (
-	MIN_TIMELINE = 0x00000001
-	MAX_TIMELINE = 0xFFFFFFFF
-	MIN_LOGICAL  = 0x00000000
-	MAX_LOGICAL  = 0xFF000000
-	MIN_PHYSICAL = 0x00000000
-	MAX_PHYSICAL = 0x000000FE
+	MIN_TIMELINE uint64 = 0x00000001
+	MAX_TIMELINE uint64 = 0xFFFFFFFF
+	MIN_LOGICAL  uint64 = 0x00000000
+	MAX_LOGICAL  uint64 = 0xFF000000
+	MIN_PHYSICAL uint64 = 0x00000000
+	MAX_PHYSICAL uint64 = 0x000000FE
+
+	SEG_FMT = "%08X%08X%08X"
 )
 
 // get_args parses the command-line arguments and returns the two segments.
@@ -45,14 +46,27 @@ func getArgs() (string, string) {
 
 	args := flag.Args()
 
+	defaultStart := fmt.Sprintf(SEG_FMT, MIN_TIMELINE, MIN_LOGICAL, MIN_PHYSICAL)
+	defaultStop := fmt.Sprintf(SEG_FMT, MAX_TIMELINE, MAX_LOGICAL, MAX_PHYSICAL)
+
+	if len(args) == 0 {
+		return defaultStart, defaultStop
+	}
+
 	segStart := args[0]
 	if len(segStart) != 24 {
-		log.Fatal("seg_start should be 24 characters long")
+		fmt.Fprintln(os.Stderr, "seg_start should be 24 characters long")
+		os.Exit(100)
+	}
+
+	if len(args) == 1 {
+		return segStart, defaultStop
 	}
 
 	segStop := args[1]
 	if len(segStop) != 24 {
-		log.Fatal("seg_stop should be 24 characters long")
+		fmt.Fprintln(os.Stderr, "seg_stop should be 24 characters long")
+		os.Exit(101)
 	}
 
 	return segStart, segStop
@@ -60,11 +74,12 @@ func getArgs() (string, string) {
 
 // parseSegUnit converts an hexadecimal string to a unsigned 64 bit integer,
 // doing all the error handling.
-func parseSegUint(s string) uint64 {
-	i, err := strconv.ParseUint(s, 16, 64)
+func parseSegUint(seg string) uint64 {
+	i, err := strconv.ParseUint(seg, 16, 64)
 
 	if err != nil {
-		log.Fatal(err)
+		fmt.Fprintln(os.Stderr, "Unable to parse segment '%s'", seg)
+		os.Exit(102)
 	}
 
 	return i
@@ -84,7 +99,9 @@ func main() {
 	segStart, segStop := getArgs()
 
 	if segStop < segStart {
-		log.Fatal("End segment should be larger (older) than the start segment.")
+		fmt.Fprintln(os.Stderr, "End segment should be larger (older) than "+
+			"the start segment")
+		os.Exit(103)
 	}
 
 	startTimeline, startLogical, startPhysical := segToIntegers(segStart)
@@ -110,7 +127,7 @@ func main() {
 			}
 
 			for physical := startPhysical; physical <= stopPhysical; physical++ {
-				fmt.Printf("%08X%08X%08X\n", timeline, logical, physical)
+				fmt.Printf(SEG_FMT+"\n", timeline, logical, physical)
 			}
 
 			// After the first loop, start back at 0.
